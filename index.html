@@ -17,8 +17,8 @@
         <script src="js/iceUtils.js"></script>
         <script src="js/iceOpenCds.js"></script>
         <script src="js/icePatient.js"></script>
-        <script src="cordova.js"></script>
         <script src="js/iceInit.js"></script>
+        <script src="https://rawgit.com/smart-on-fhir/client-js/master/dist/fhir-client.js"></script>
     </head>
     <body onload="onLoad()">
         <div data-role="page" id="main">
@@ -43,6 +43,7 @@
                     </table>
                     <script type="text/javascript">
                         listPatients();
+                        processLaunch();
                     </script>
                     <a href="#savePatient" onclick="clearSavePatient();
                             currentPage = 'savePatient';" class="ui-btn ui-btn-inline ui-icon-plus ui-btn-icon-left">Add Patient</a>

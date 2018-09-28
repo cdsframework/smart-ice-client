@@ -72,25 +72,31 @@ function getAgeFromISOs(dateString1, dateString2) {
 }
 
 function getFormattedDateFromISO(dateString) {
-    var rawDate = getDateFromISO(dateString);
-    var day = rawDate.getDate();
-    if (day < 10) {
-        day = '0' + day;
+    let result;
+    let rawDate = getDateFromISO(dateString);
+    if (rawDate) {
+        let day = rawDate.getDate();
+        if (day < 10) {
+            day = '0' + day;
+        }
+        let month = (rawDate.getMonth() + 1);
+        if (month < 10) {
+            month = '0' + month;
+        }
+        result = rawDate.getFullYear() + '-' + month + '-' + day;
     }
-    var month = (rawDate.getMonth() + 1);
-    if (month < 10) {
-        month = '0' + month;
-    }
-    var result = rawDate.getFullYear() + '-' + month + '-' + day;
     return result;
 }
 
 function getDateFromISO(dateString) {
-    var result = new Date(
-            dateString.substring(0, 4),
-            (dateString.substring(4, 6)) - 1,
-            dateString.substring(6, 8),
-            0, 0, 0, 0);
+    let result;
+    if (dateString) {
+        result = new Date(
+                dateString.substring(0, 4),
+                (dateString.substring(4, 6)) - 1,
+                dateString.substring(6, 8),
+                0, 0, 0, 0);
+    }
     return result;
 }
 

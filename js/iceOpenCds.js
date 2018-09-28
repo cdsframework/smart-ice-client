@@ -1,3 +1,5 @@
+/* global vaccineGroups, icd9DiseaseData, cvxData, cvxCodeSystem */
+
 function icePatient(id) {
     var settings = getSettings();
     var patientList = getPatientList();
@@ -227,6 +229,7 @@ function getPatientDemographics(patient, patientNode) {
     var idNode = patientNode.getElementsByTagName('id')[0];
     patient['firstName'] = 'Patient';
     patient['lastName'] = idNode.getAttribute('extension');
+    patient['id'] = idNode.getAttribute('extension');
     patient['dob'] = patientNode.getElementsByTagName('birthTime')[0].getAttribute('value').substring(0, 8);
     patient['gender'] = patientNode.getElementsByTagName('gender')[0].getAttribute('code');
     if (patientNode.getElementsByTagName('observationFocus')[0].getAttribute('code') === 'U') {
@@ -245,6 +248,9 @@ function getPatientEvents(patient, patientNode) {
             if (childNodes[i].nodeName.toLowerCase() === 'substanceadministrationevent') {
                 var child = childNodes[i];
                 var id = child.getElementsByTagName('id')[0].getAttribute('extension');
+                if (id.indexOf('.') > -1) {
+                    id = getGuid();
+                }
                 var substanceCode = child.getElementsByTagName('substanceCode')[0].getAttribute('code');
                 var cvxCode = cvxData[substanceCode];
                 if (cvxCode !== null && typeof (cvxCode) !== 'undefined') {
@@ -262,9 +268,36 @@ function getPatientEvents(patient, patientNode) {
         for (var i = 0; i < childNodes.length; i++) {
             if (childNodes[i].nodeName.toLowerCase() === 'observationresult') {
                 var child = childNodes[i];
-                var id = child.getElementsByTagName('id')[0].getAttribute('root');
-                var observationFocus = child.getElementsByTagName('observationFocus')[0].getAttribute('code');
-                var observationEventTime = child.getElementsByTagName('observationEventTime')[0].getAttribute('high').substring(0, 8);
+                var ids = child.getElementsByTagName('id');
+                var id;
+                if (ids && ids.length > 0) {
+                    var firstId = ids[0];
+                    if (firstId) {
+                        id = firstId.getAttribute('root');
+                    }
+                }
+                if (id.indexOf('.') > -1) {
+                    id = getGuid();
+                }
+                var observationFocus;
+                var focuses = child.getElementsByTagName('observationFocus');
+                if (focuses && focuses.length > 0) {
+                    var firstFocus = focuses[0];
+                    if (firstFocus) {
+                        observationFocus = firstFocus.getAttribute('code');
+                    }
+                }
+                var observationEventTime;
+                var observationEventTimes = child.getElementsByTagName('observationEventTime');
+                if (observationEventTimes && observationEventTimes.length > 0) {
+                    var firstTime = observationEventTimes[0];
+                    if (firstTime) {
+                        observationEventTime = firstTime.getAttribute('high');
+                        if (observationEventTime && observationEventTime.length > 8) {
+                            observationEventTime = observationEventTime.substring(0, 8);
+                        }
+                    }
+                }
                 if (observationFocus !== 'U') {
                     patient['izs'][patient['izs'].length] = [id, observationEventTime, observationFocus, 'D'];
 //                console.log([id, administrationTime, substanceCode]);
@@ -457,14 +490,14 @@ function getEvaluations(cdsOutputDoc, settings) {
                     var evaluationSubstanceAdministrationEvent = relatedClinicalStatement.getElementsByTagName('substanceAdministrationEvent')[0];
                     var observationResult = evaluationSubstanceAdministrationEvent.getElementsByTagName('observationResult')[0];
                     var conceptNodes = observationResult.getElementsByTagName('concept');
-		    var doseNumber = 'N/A';
-		    if (evaluationSubstanceAdministrationEvent.getElementsByTagName('doseNumber') !== null && typeof (evaluationSubstanceAdministrationEvent.getElementsByTagName('doseNumber')) !== 'undefined' && evaluationSubstanceAdministrationEvent.getElementsByTagName('doseNumber').length > 0) {
-			doseNumber = evaluationSubstanceAdministrationEvent.getElementsByTagName('doseNumber')[0].getAttribute('value');
-		    }
-		    var isValid = 'N/A';
-    		    if (evaluationSubstanceAdministrationEvent.getElementsByTagName('isValid') !== null && typeof (evaluationSubstanceAdministrationEvent.getElementsByTagName('isValid')) !== 'undefined' && evaluationSubstanceAdministrationEvent.getElementsByTagName('isValid').length > 0) {
-			isValid = evaluationSubstanceAdministrationEvent.getElementsByTagName('isValid')[0].getAttribute('value');
-		    }
+                    var doseNumber = 'N/A';
+                    if (evaluationSubstanceAdministrationEvent.getElementsByTagName('doseNumber') !== null && typeof (evaluationSubstanceAdministrationEvent.getElementsByTagName('doseNumber')) !== 'undefined' && evaluationSubstanceAdministrationEvent.getElementsByTagName('doseNumber').length > 0) {
+                        doseNumber = evaluationSubstanceAdministrationEvent.getElementsByTagName('doseNumber')[0].getAttribute('value');
+                    }
+                    var isValid = 'N/A';
+                    if (evaluationSubstanceAdministrationEvent.getElementsByTagName('isValid') !== null && typeof (evaluationSubstanceAdministrationEvent.getElementsByTagName('isValid')) !== 'undefined' && evaluationSubstanceAdministrationEvent.getElementsByTagName('isValid').length > 0) {
+                        isValid = evaluationSubstanceAdministrationEvent.getElementsByTagName('isValid')[0].getAttribute('value');
+                    }
                     var componentSubstanceCode = evaluationSubstanceAdministrationEvent.getElementsByTagName('substanceCode')[0].getAttribute('code');
                     var observationEventTime = observationResult.getElementsByTagName('observationEventTime')[0].getAttribute('high').substring(0, 8);
                     var observationFocus = observationResult.getElementsByTagName('observationFocus')[0].getAttribute('code');
@@ -516,10 +549,45 @@ function getEvaluations(cdsOutputDoc, settings) {
     for (var i = 0; i < childNodes.length; i++) {
         if (childNodes[i].nodeName.toLowerCase() === 'observationresult') {
             var child = childNodes[i];
-            var id = child.getElementsByTagName('id')[0].getAttribute('root');
-            var observationFocus = child.getElementsByTagName('observationFocus')[0].getAttribute('code');
-            var observationEventTime = child.getElementsByTagName('observationEventTime')[0].getAttribute('high').substring(0, 8);
-            var concept = child.getElementsByTagName('concept')[0].getAttribute('code');
+            var child = childNodes[i];
+            var ids = child.getElementsByTagName('id');
+            var id;
+            if (ids && ids.length > 0) {
+                var firstId = ids[0];
+                if (firstId) {
+                    id = firstId.getAttribute('root');
+                }
+            }
+            if (id.indexOf('.') > -1) {
+                id = getGuid();
+            }
+            var observationFocus;
+            var focuses = child.getElementsByTagName('observationFocus');
+            if (focuses && focuses.length > 0) {
+                var firstFocus = focuses[0];
+                if (firstFocus) {
+                    observationFocus = firstFocus.getAttribute('code');
+                }
+            }
+            var observationEventTime;
+            var observationEventTimes = child.getElementsByTagName('observationEventTime');
+            if (observationEventTimes && observationEventTimes.length > 0) {
+                var firstTime = observationEventTimes[0];
+                if (firstTime) {
+                    observationEventTime = firstTime.getAttribute('high');
+                    if (observationEventTime && observationEventTime.length > 8) {
+                        observationEventTime = observationEventTime.substring(0, 8);
+                    }
+                }
+            }
+            var concept;
+            var concepts = child.getElementsByTagName('concept');
+            if (concepts && concepts.length > 0) {
+                var firstCode = concepts[0];
+                if (firstCode) {
+                    concept = firstCode.getAttribute('code');
+                }
+            }
             var disease = icd9DiseaseData[observationFocus];
             var groupKey;
             if (disease !== null && typeof (disease) !== 'undefined') {

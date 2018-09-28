@@ -1,3 +1,5 @@
+/* global FHIR, mobileDetected, defaultPatientList */
+
 /**
  * Patient related script.
  * 
@@ -392,7 +394,7 @@ function appendIzTableRow(tbdy, data) {
     var tr = document.createElement('tr');
 
     // event type select
-    td = document.createElement('td');
+    var td = document.createElement('td');
     td.setAttribute('class', 'izTypeSelect');
     var fieldset = document.createElement('fieldset');
     fieldset.setAttribute('data-role', 'controlgroup');
@@ -564,11 +566,11 @@ function _setIzCodeData(value, object, data) {
  * Things to call after all assets are loaded.
  * 
  */
-$(document).ready(function() {
+$(document).ready(function () {
     /**
      * Update the delete confirm dialog contents each time it is displayed.
      */
-    $('#deleteConfirm').on("pagecreate", function(event, ui) {
+    $('#deleteConfirm').on("pagecreate", function (event, ui) {
         var patient = getPatientList()[getSelectedPatient()];
         $('#deleteConfirmMessage').empty()
                 .append('Are you sure you want to delete patient "' + patient['firstName'] + ' ' + patient['lastName'] + '"?');
@@ -577,12 +579,12 @@ $(document).ready(function() {
     /**
      * Patient file import event.
      */
-    $('#importPatientInput').on('change', function(event, ui) {
+    $('#importPatientInput').on('change', function (event, ui) {
         file = event.target.files[0];
 
         var reader = new FileReader();
-        reader.onload = (function(theFile) {
-            return function(e) {
+        reader.onload = (function (theFile) {
+            return function (e) {
                 importPatient(e.target.result);
                 currentPage = 'main';
                 document.location.href = '#main';
@@ -611,7 +613,9 @@ function importPatient(data) {
     var patientList = getPatientList();
     for (var c = 0; c < patients.length; c++) {
         var patient = patients[c];
-        patient['id'] = getGuid();
+        if (typeof patient['id'] === 'undefined') {
+            patient['id'] = getGuid();
+        }
         patientList[patient['id']] = patient;
     }
     setPatientList(patientList);
@@ -621,22 +625,109 @@ function initPatientValidation() {
 
 //    console.log('called initPatientValidation');
 
-    $.validator.addMethod("dateISO", function(value, element) {
+    $.validator.addMethod("dateISO", function (value, element) {
         return this.optional(element) || /^\d{4}(0?[1-9]|1[012])(0?[1-9]|[12][0-9]|3[01])$/.test(value);
     }, "Please specify a valid date. e.g. 19301231");
 
     $('#savePatientForm').validate({
-        onfocusout: function(element, event) {
+        onfocusout: function (element, event) {
             var id = '#' + element.id;
-            if (!$("#savePatientForm").validate().element(id)) {
+            if ($("#savePatientForm").length < 1 || !$("#savePatientForm").validate().element(id)) {
                 $(id + 'Error').show();
             } else {
                 $(id + 'Error').hide();
             }
         },
-        errorPlacement: function(error, element) {
+        errorPlacement: function (error, element) {
 //            console.log($('#' + element[0].id + 'Error'));
             error.appendTo($('#' + element[0].id + 'Error'));
         }
     });
+}
+const vmrConverterService = 'https://cds.hln.com/vmr-converter-service/api/resources/convert/fhir'
+
+function processLaunch() {
+
+    FHIR.oauth2.ready(function (smart) {
+        var patientList = getPatientList();
+        var found = false;
+        for (var patientId in patientList) {
+            var patient = patientList[patientId];
+            //console.log('comparing ' + patient.id + ' and ' + smart.patient.id + ' for ' + patient.firstName + ' ' + patient.lastName);
+            if (patient.id === smart.patient.id) {
+                found = true;
+                break;
+            }
+        }
+        console.log('found: ' + found);
+        if (found) {
+            icePatient(smart.patient.id);
+            currentPage = 'icePatient';
+            $.mobile.changePage('#icePatient');
+            return;
+        }
+        let prefetch = {
+            hook: "patient-view",
+            fhirServer: smart.server.serviceUrl,
+            patient: smart.patient.id,
+            context: {
+                patientId: smart.patient.id
+            },
+            fhirAuthorization: {
+                access_token: smart.server.auth.token,
+                token_type: smart.server.auth.type,
+                scope: "patient/*.* user/*.* launch openid profile online_access"
+            },
+            immunization: {
+                resourceType: "Bundle",
+                id: "d47b3b4b-4c03-4471-8bed-2845fc6e62a1",
+                meta: {
+                    lastUpdated: "2018-09-26T14:06:03.928+00:00"
+                },
+                type: "searchset",
+                total: 0,
+                entry: []
+            }
+        };
+
+        smart.patient.read().then(function (patient) {
+            prefetch.patient = patient;
+        });
+        let i = 0;
+        smart.patient.api.fetchAllWithReferences({type: "Immunization", count: 1000}).then(function (results, refs) {
+            results.forEach(function (immunization) {
+                i++;
+                prefetch.immunization.entry.push(immunization);
+                // console.log(immunization);
+            });
+            prefetch.immunization.total = i;
+            //console.log(JSON.stringify(prefetch, null, 4));
+
+            $.ajax({
+                type: "POST",
+                url: vmrConverterService,
+                data: JSON.stringify(prefetch),
+                contentType: "application/json; charset=utf-8",
+                dataType: "xml",
+                success: function (data, status, jqXHR) {
+                    var xmlText = new XMLSerializer().serializeToString(data.documentElement);
+                    // console.log(xmlText);
+                    importPatient(btoa(xmlText));
+                    listPatients();
+                    icePatient(smart.patient.id);
+                    currentPage = 'icePatient';
+                    $.mobile.changePage('#icePatient');
+                },
+
+                error: function (jqXHR, status) {
+                    // error handler
+                    console.log('2');
+                    console.log(JSON.stringify(jqXHR, null, 4));
+                    console.log(JSON.stringify(status, null, 4));
+                }
+            });
+        });
+    });
+
+
 }
